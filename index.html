@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>JJ 숨은그림찾기</title>
+<style>
+  :root { --bg: #eef7f2; --ink: #23332b; --sub: #6d8579; --pri: #2bb673; --pri2: #20a2c9; --line: #d6e7de; --card: #fff; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    height: 100vh; height: 100dvh; display: flex; flex-direction: column;
+    padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+  .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; }
+  .top h1 { font-size: clamp(16px, 4.6vw, 20px); font-weight: 900; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .back { text-decoration: none; color: var(--sub); font-size: 13px; font-weight: 700; padding: 5px 9px; border-radius: 99px; background: #fff; border: 1px solid var(--line); white-space: nowrap; }
+  body.in-app .back { display: none; }
+  .chip { background: #fff; border: 1px solid var(--line); border-radius: 99px; padding: 5px 10px; font-size: 13px; font-weight: 900; white-space: nowrap; }
+  .chip b { color: var(--pri); }
+  .btn {
+    border: none; border-radius: 14px; padding: 11px 16px; font-size: 15px; font-weight: 900; cursor: pointer;
+    background: linear-gradient(135deg, var(--pri), var(--pri2)); color: #fff; box-shadow: 0 4px 12px rgba(43, 182, 115, .3);
+  }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1.5px solid var(--line); box-shadow: none; }
+  .btn:active { transform: scale(.96); }
+  .btn[disabled] { opacity: .45; }
+
+  /* 게임 화면 */
+  #game { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 6px; }
+  #game.on { display: flex; }
+  .stage {
+    position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 16px;
+    background: #fff; border: 2px solid #fff; box-shadow: 0 4px 16px rgba(35, 51, 43, .12); touch-action: none; cursor: crosshair;
+  }
+  .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .world canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .zoom { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+  .zoom button { width: 38px; height: 38px; border-radius: 12px; border: none; background: rgba(255,255,255,.92); font-size: 20px; font-weight: 900; color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.15); cursor: pointer; }
+  .ztip { position: absolute; left: 8px; bottom: 8px; background: rgba(35,51,43,.72); color: #fff; font-size: 11.5px; padding: 4px 9px; border-radius: 99px; z-index: 3; pointer-events: none; transition: opacity .4s; }
+  .bar { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+  .bar .btn { padding: 8px 12px; font-size: 13.5px; border-radius: 12px; }
+  .tray { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+  .ic { position: relative; aspect-ratio: 1; background: #fff; border: 1.5px solid var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .ic canvas { width: 72%; height: 72%; }
+  .ic.found { background: #e2f7ec; border-color: var(--pri); }
+  .ic.found canvas { opacity: .35; }
+  .ic.found::after { content: '✓'; position: absolute; font-size: 18px; font-weight: 1000; color: var(--pri); }
+  .ic .nm { display: none; }
+  .ic.flash { animation: icf .6s 2; }
+  @keyframes icf { 50% { transform: scale(1.18); border-color: #ffc34d; } }
+  .msg { text-align: center; font-size: 13px; color: var(--sub); font-weight: 700; min-height: 18px; }
+
+  /* 시작 화면 */
+  #home { flex: 1; overflow-y: auto; }
+  #home.off { display: none; }
+  .hero { border-radius: 20px; padding: 16px 14px; text-align: center; margin-bottom: 10px;
+    background: linear-gradient(rgba(238,247,242,.86), rgba(238,247,242,.9)), url('thumbs/mosaic.webp') center / cover; }
+  .hero .e { font-size: 44px; }
+  .hero p { color: var(--sub); font-size: 14px; line-height: 1.55; margin: 4px 0 10px; }
+  .seg { display: flex; background: #dcebe3; border-radius: 99px; padding: 4px; margin: 0 auto 10px; max-width: 340px; }
+  .seg button { flex: 1; border: none; background: transparent; padding: 8px; border-radius: 99px; font-weight: 900; font-size: 13.5px; color: var(--sub); cursor: pointer; }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+  .th { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #dfeee6; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.08); cursor: pointer; }
+  .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .th .ok { position: absolute; right: 5px; top: 5px; background: var(--pri); color: #fff; font-size: 10.5px; font-weight: 900; padding: 2px 6px; border-radius: 99px; }
+
+  .win { position: fixed; inset: 0; background: rgba(35, 51, 43, .55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 18px; overflow-y: auto; }
+  .win.on { display: flex; }
+  .card { background: #fff; border-radius: 22px; padding: 20px 18px; width: min(360px, 100%); text-align: center; margin: auto; }
+  .card h2 { font-size: 22px; }
+  .card .stars { font-size: 32px; letter-spacing: 4px; margin: 4px 0; color: #ffb703; }
+  .card p { color: var(--sub); font-size: 14px; line-height: 1.55; margin: 6px 0 12px; }
+  .card .row { display: flex; gap: 8px; }
+  .card .row .btn { flex: 1; }
+
+  @media (max-width: 360px) { .tray { grid-template-columns: repeat(8, 1fr); gap: 3px; } .ic { border-radius: 8px; } .chip { padding: 4px 8px; font-size: 12px; } }
+  @media (orientation: landscape) and (max-height: 520px) {
+    #game.on { display: grid; grid-template-columns: 1fr minmax(180px, 30vw); grid-template-rows: auto 1fr auto; gap: 6px 10px; }
+    .stage { grid-column: 1; grid-row: 1 / 4; }
+    .bar { grid-column: 2; grid-row: 1; flex-wrap: wrap; }
+    .tray { grid-column: 2; grid-row: 2; grid-template-columns: repeat(5, 1fr); align-content: start; }
+    .msg { grid-column: 2; grid-row: 3; }
+  }
+</style>
+</head>
+<body>
+  <div class="top">
+    <a class="back" href="index.html?open=play">← 갤러리</a>
+    <h1>🔍 JJ 숨은그림찾기</h1>
+    <span class="chip" id="foundChip" style="display:none">🔎 <b id="found">0</b>/15</span>
+    <span class="chip" id="timeChip" style="display:none">⏱ <b id="time">0:00</b></span>
+  </div>
+
+  <section id="home">
+    <div class="hero">
+      <div class="e">🔍</div>
+      <p>JJ의 그림 속에 작은 그림 <b>15개</b>가 숨어 있어요!<br>탕후루, 버블티, 마카롱… 찾으면 콕 눌러요.<br><small>두 손가락으로 벌리면 크게 볼 수 있어요</small></p>
+      <div class="seg" id="lvSeg">
+        <button data-lv="0">🌱 쉬움</button>
+        <button data-lv="1" class="on">🔍 보통</button>
+        <button data-lv="2">🦉 어려움</button>
+      </div>
+      <button class="btn" id="randBtn">🎲 아무 그림으로 시작</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="game">
+    <div class="stage" id="stage">
+      <div class="world" id="world"><canvas id="art"></canvas><canvas id="marks"></canvas></div>
+      <div class="ztip" id="ztip">두 손가락으로 벌리면 확대 · 끌어서 이동</div>
+      <div class="zoom"><button id="zin">＋</button><button id="zout">－</button><button id="zfit" style="font-size:15px">⤢</button></div>
+    </div>
+    <div class="bar">
+      <button class="btn ghost" id="homeBtn">🖼 그림</button>
+      <button class="btn" id="hintBtn">💡 힌트 3</button>
+    </div>
+    <div class="tray" id="tray"></div>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <div class="win" id="win">
+    <div class="card">
+      <h2>🎉 15개 다 찾았어요!</h2>
+      <div class="stars" id="stars">★★★</div>
+      <p id="winMsg"></p>
+      <div class="row">
+        <button class="btn" id="nextBtn">다음 그림 ▶</button>
+        <button class="btn ghost" id="viewBtn">그림 보기</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  try { if (window.self !== window.top) document.body.classList.add('in-app'); } catch (e) { document.body.classList.add('in-app'); }
+  const $ = id => document.getElementById(id);
+  const KEY = 'agjj_hidden_v1';
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || { done: {} }; } catch (e) { return { done: {} }; } };
+  const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} };
+
+  // ---------- 숨길 아이콘 (24×24 선 그림) ----------
+  const C = (x, y, r) => `M${x - r} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+  const ICONS = [
+    ['하트', 'M12 20.5s-7.5-4.6-9.3-9.4C1.4 7.6 3.8 4.5 7 4.5c2.2 0 3.6 1.3 5 3.2 1.4-1.9 2.8-3.2 5-3.2 3.2 0 5.6 3.1 4.3 6.6-1.8 4.8-9.3 9.4-9.3 9.4z'],
+    ['별', 'M12 2.5l2.9 6.2 6.8.8-5 4.6 1.4 6.7L12 17.4l-6.1 3.4 1.4-6.7-5-4.6 6.8-.8z'],
+    ['왕관', 'M3 17.5h18l-1.4-10-4.6 4.2L12 5.5l-3 6.2-4.6-4.2zM3.5 20.5h17'],
+    ['다이아', 'M6.5 4h11l4 5.5L12 21 2.5 9.5zM2.5 9.5h19M9 4l3 5.5L15 4M12 21L8.6 9.5M12 21l3.4-11.5'],
+    ['아이스크림', 'M7.5 10.5a4.5 4.5 0 0 1 9 0zM6.5 10.5h11L12 22zM9.5 14l4 2.5M10.5 17.5l2.5 1.5' + C(12, 5.2, 2.2)],
+    ['도넛', C(12, 12, 9) + C(12, 12, 3.4) + 'M6 8.5l1 1M16.5 7l-.8 1.2M17.5 14.5l1 .6M8 16.5l-.8.9'],
+    ['탕후루', 'M12 23V2.5' + C(12, 5.5, 2.8) + C(12, 11, 2.8) + C(12, 16.5, 2.8)],
+    ['버블티', 'M6 8h12l-1.6 13.5H7.6zM5 8h14M13.5 8l2.5-6' + C(9.5, 17.5, .9) + C(12.2, 18.5, .9) + C(14.6, 17, .9)],
+    ['마카롱', 'M4 10a8 4.5 0 0 1 16 0zM4 14a8 4.5 0 0 0 16 0zM3.5 12h17'],
+    ['젤리곰', C(12, 8, 4) + C(8, 4.8, 1.7) + C(16, 4.8, 1.7) + 'M8 12.5c-2.5 1-2.6 7 0 8.5h8c2.6-1.5 2.5-7.5 0-8.5M10.5 7.5h.1M13.5 7.5h.1'],
+    ['네잎클로버', C(9, 9, 3.2) + C(15, 9, 3.2) + C(9, 15, 3.2) + C(15, 15, 3.2) + 'M12 12c2 3 4 6 7 10'],
+    ['무지개', 'M2.5 18a9.5 9.5 0 0 1 19 0M5.8 18a6.2 6.2 0 0 1 12.4 0M9 18a3 3 0 0 1 6 0'],
+    ['게임기', 'M7 7.5h10a5 5 0 0 1 4.6 7l-1 2.6a2 2 0 0 1-3.3.6L15 15.5H9l-2.3 2.2a2 2 0 0 1-3.3-.6l-1-2.6A5 5 0 0 1 7 7.5zM7 10v3.5M5.3 11.7h3.4' + C(16, 11, .9) + C(18, 13, .9)],
+    ['고양이', 'M4.5 10l.8-6.5 4.3 3.3h4.8l4.3-3.3.8 6.5a7.6 7.6 0 1 1-15 0zM9 12.5h.1M15 12.5h.1M11 15.5l1 1 1-1M3 14l4 .5M3.5 17l3.5-1M21 14l-4 .5M20.5 17l-3.5-1'],
+    ['발바닥', C(12, 15.5, 4) + C(6, 10.5, 2) + C(10, 6.8, 2) + C(14, 6.8, 2) + C(18, 10.5, 2)],
+    ['로켓', 'M12 2c4 3 5.2 8 3 13.5H9C6.8 10 8 5 12 2zM9 15.5l-3.2 3 3.2.8M15 15.5l3.2 3-3.2.8M10.5 18.5L12 22l1.5-3.5' + C(12, 9.5, 1.7)],
+    ['헤드폰', 'M4 15v-3a8 8 0 0 1 16 0v3M3.5 14h3.5v6.5H3.5zM17 14h3.5v6.5H17z'],
+    ['선글라스', 'M1.5 9h21M3 9l.8 5a3.2 3.2 0 0 0 6.4 0l.4-3h2.8l.4 3a3.2 3.2 0 0 0 6.4 0l.8-5'],
+    ['풍선', 'M12 2.5c3.6 0 6 3 6 6.6 0 4-3 7.4-6 7.4s-6-3.4-6-7.4c0-3.6 2.4-6.6 6-6.6zM11 16.5h2l-1 1.5zM12 18c-1.5 1.5 1.5 2.5 0 4'],
+    ['음표', 'M9 18V5.5l11-2.5v12.5' + C(6.3, 18, 2.7) + C(17.3, 15.5, 2.7) + 'M9 9l11-2.5']
+  ];
+  const PATHS = ICONS.map(i => new Path2D(i[1]));
+  const LEVELS = [
+    { size: 0.085, alpha: 0.95, width: 2.2, name: '쉬움' },
+    { size: 0.062, alpha: 0.78, width: 2.0, name: '보통' },
+    { size: 0.05, alpha: 0.6, width: 1.8, name: '어려움' }
+  ];
+
+  let works = [], level = 1, cur = null, hidden = [], foundN = 0, hints = 3, t0 = 0, timer = null, img = null, IW = 0, IH = 0;
+  let z = { s: 1, tx: 0, ty: 0, bw: 0, bh: 0 };
+
+  async function boot() {
+    try { works = (await (await fetch('thumbs/index.json?v=1')).json()).works || []; } catch (e) { works = []; }
+    renderGrid();
+  }
+  function renderGrid() {
+    const st = load();
+    $('grid').innerHTML = works.map((w, i) => `<div class="th" data-i="${i}"><img loading="lazy" src="thumbs/${w.id}.webp" alt="">${st.done[w.id] ? `<span class="ok">✓ ${fmt(st.done[w.id])}</span>` : ''}</div>`).join('');
+    $('grid').querySelectorAll('.th').forEach(el => el.onclick = () => start(works[+el.dataset.i]));
+  }
+  const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  function start(w) {
+    cur = w; foundN = 0; hints = 3;
+    $('home').classList.add('off'); $('game').classList.add('on'); $('win').classList.remove('on');
+    $('foundChip').style.display = ''; $('timeChip').style.display = '';
+    $('msg').textContent = '그림을 불러오는 중…';
+    img = new Image();
+    img.onload = () => { IW = img.naturalWidth; IH = img.naturalHeight; build(); };
+    img.onerror = () => { $('msg').textContent = '그림을 불러오지 못했어요. 다른 그림을 골라 주세요.'; };
+    img.src = `thumbs/m/${w.id}.webp`;
+  }
+
+  // ---------- 아이콘 숨기기 ----------
+  function build() {
+    const art = $('art'), mk = $('marks');
+    art.width = mk.width = IW; art.height = IH;
+    mk.height = IH;
+    const c = art.getContext('2d', { willReadFrequently: true });
+    c.drawImage(img, 0, 0);
+    const lv = LEVELS[level];
+    const sz = Math.round(Math.min(IW, IH) * lv.size);
+    // 아이콘 20개 중 15개 고르기
+    const pick = ICONS.map((_, i) => i).sort(() => Math.random() - .5).slice(0, 15);
+    hidden = [];
+    const minD = sz * 1.5;
+    pick.forEach(k => {
+      let x, y, tries = 0;
+      do {
+        x = sz + Math.random() * (IW - sz * 2);
+        y = sz + Math.random() * (IH - sz * 2);
+        tries++;
+      } while (tries < 200 && hidden.some(h => Math.hypot(h.x - x, h.y - y) < minD));
+      hidden.push({ k, x, y, r: sz / 2, rot: (Math.random() - .5) * 1.2, found: false });
+    });
+    hidden.forEach(h => {
+      // 아이콘 밑 색을 살짝 진하게/밝게 해서 그림 속에 섞이게
+      const d = c.getImageData(Math.max(0, h.x - h.r) | 0, Math.max(0, h.y - h.r) | 0, sz, sz).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 16) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      r /= n; g /= n; b /= n;
+      const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const f = L > 0.55 ? 0.42 : 1.9;
+      const cl = v => Math.max(0, Math.min(255, Math.round(L > 0.55 ? v * f : v + (255 - v) * 0.55)));
+      c.save();
+      c.globalAlpha = lv.alpha;
+      c.translate(h.x, h.y); c.rotate(h.rot); c.scale(sz / 24, sz / 24); c.translate(-12, -12);
+      c.lineWidth = lv.width; c.lineJoin = 'round'; c.lineCap = 'round';
+      c.fillStyle = `rgba(${cl(r)},${cl(g)},${cl(b)},0.12)`;
+      c.fill(PATHS[h.k]);
+      c.strokeStyle = `rgb(${cl(r)},${cl(g)},${cl(b)})`;
+      c.stroke(PATHS[h.k]);
+      c.restore();
+    });
+    mk.getContext('2d').clearRect(0, 0, IW, IH);
+    renderTray();
+    fit();
+    t0 = Date.now(); clearInterval(timer);
+    timer = setInterval(() => { $('time').textContent = fmt(Math.floor((Date.now() - t0) / 1000)); }, 500);
+    $('time').textContent = '0:00';
+    $('found').textContent = 0;
+    $('hintBtn').textContent = `💡 힌트 ${hints}`; $('hintBtn').disabled = false;
+    $('msg').textContent = `「${cur.title || 'JJ의 그림'}」 · ${lv.name}`;
+    $('ztip').style.opacity = 1; setTimeout(() => $('ztip').style.opacity = 0, 3500);
+  }
+
+  function drawIcon(cv, k, color) {
+    const s = cv.width;
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, s, s);
+    c.save(); c.scale(s / 24, s / 24);
+    c.lineWidth = 1.8; c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = color || '#23332b';
+    c.stroke(PATHS[k]); c.restore();
+  }
+  function renderTray() {
+    $('tray').innerHTML = hidden.map((h, i) => `<div class="ic" id="ic${i}" title="${ICONS[h.k][0]}"><canvas width="64" height="64"></canvas></div>`).join('');
+    hidden.forEach((h, i) => drawIcon($('ic' + i).querySelector('canvas'), h.k));
+  }
+
+  // ---------- 확대 · 이동 ----------
+  function fit() {
+    const st = $('stage').getBoundingClientRect();
+    const k = Math.min(st.width / IW, st.height / IH);
+    z.bw = IW * k; z.bh = IH * k; z.s = 1;
+    $('world').style.width = z.bw + 'px'; $('world').style.height = z.bh + 'px';
+    clampZ(); applyZ();
+  }
+  function clampZ() {
+    const st = $('stage').getBoundingClientRect();
+    const w = z.bw * z.s, h = z.bh * z.s;
+    z.tx = w <= st.width ? (st.width - w) / 2 : Math.min(0, Math.max(st.width - w, z.tx));
+    z.ty = h <= st.height ? (st.height - h) / 2 : Math.min(0, Math.max(st.height - h, z.ty));
+  }
+  function applyZ() { $('world').style.transform = `translate(${z.tx}px, ${z.ty}px) scale(${z.s})`; }
+  function zoomAt(px, py, ns) {
+    ns = Math.max(1, Math.min(5, ns));
+    z.tx = px - (px - z.tx) * (ns / z.s);
+    z.ty = py - (py - z.ty) * (ns / z.s);
+    z.s = ns; clampZ(); applyZ();
+  }
+  function local(e) { const r = $('stage').getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+  const ptrs = new Map();
+  let gesture = null, lastTap = 0;
+  $('stage').addEventListener('pointerdown', e => {
+    if (e.target.closest('.zoom')) return;
+    $('stage').setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, local(e));
+    if (ptrs.size === 1) {
+      const p = local(e);
+      gesture = { type: 'pan', sx: p.x, sy: p.y, tx: z.tx, ty: z.ty, moved: 0 };
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()];
+      gesture = { type: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), s: z.s, moved: 99 };
+    }
+  });
+  $('stage').addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, local(e));
+    if (!gesture) return;
+    if (gesture.type === 'pan' && ptrs.size === 1) {
+      const p = local(e);
+      const dx = p.x - gesture.sx, dy = p.y - gesture.sy;
+      gesture.moved = Math.max(gesture.moved, Math.abs(dx) + Math.abs(dy));
+      if (gesture.moved > 8) { z.tx = gesture.tx + dx; z.ty = gesture.ty + dy; clampZ(); applyZ(); }
+    } else if (gesture.type === 'pinch' && ptrs.size >= 2) {
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, gesture.s * d / gesture.d);
+    }
+  });
+  const endPtr = e => {
+    if (!ptrs.has(e.pointerId)) return;
+    const wasTap = gesture && gesture.type === 'pan' && gesture.moved <= 8 && ptrs.size === 1;
+    ptrs.delete(e.pointerId);
+    if (wasTap) {
+      const p = local(e), now = Date.now();
+      tap(p.x, p.y);
+      lastTap = now;
+    }
+    if (ptrs.size === 0) gesture = null;
+    else if (ptrs.size === 1) { const p = [...ptrs.values()][0]; gesture = { type: 'pan', sx: p.x, sy: p.y, tx: z.tx, ty: z.ty, moved: 99 }; }
+  };
+  $('stage').addEventListener('pointerup', endPtr);
+  $('stage').addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (!ptrs.size) gesture = null; });
+  $('stage').addEventListener('wheel', e => { e.preventDefault(); const p = local(e); zoomAt(p.x, p.y, z.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
+  const centerZoom = f => { const r = $('stage').getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, z.s * f); };
+  $('zin').onclick = () => centerZoom(1.5);
+  $('zout').onclick = () => centerZoom(1 / 1.5);
+  $('zfit').onclick = () => { z.s = 1; clampZ(); applyZ(); };
+  window.addEventListener('resize', () => { if ($('game').classList.contains('on') && IW) { const s = z.s; fit(); } });
+
+  // ---------- 찾기 ----------
+  let wrongs = [], lockUntil = 0;
+  function tap(px, py) {
+    if (!IW || Date.now() < lockUntil) return;
+    const ix = (px - z.tx) / z.s / z.bw * IW;
+    const iy = (py - z.ty) / z.s / z.bh * IH;
+    const scr = z.bw * z.s / IW;                       // 그림 1px = 화면 몇 px
+    const tol = Math.max(hidden[0].r * 1.15, 22 / scr); // 손가락 크기 고려
+    let best = null, bd = 1e9;
+    hidden.forEach((h, i) => { if (!h.found) { const d = Math.hypot(h.x - ix, h.y - iy); if (d < bd) { bd = d; best = i; } } });
+    if (best !== null && bd <= tol) return found(best);
+    // 틀림
+    ripple(ix, iy, false);
+    beep(220, .12);
+    const now = Date.now();
+    wrongs = wrongs.filter(t => now - t < 3000); wrongs.push(now);
+    if (wrongs.length >= 5) { lockUntil = now + 1500; wrongs = []; $('msg').textContent = '😵 너무 마구 눌렀어요! 잠깐 쉬어요…'; setTimeout(() => $('msg').textContent = '', 1500); }
+  }
+  function found(i) {
+    const h = hidden[i];
+    h.found = true; foundN++;
+    const c = $('marks').getContext('2d');
+    c.save();
+    c.strokeStyle = '#ff3d71'; c.lineWidth = Math.max(3, IW / 220);
+    c.shadowColor = 'rgba(255,255,255,.9)'; c.shadowBlur = 6;
+    c.beginPath(); c.arc(h.x, h.y, h.r * 1.35, 0, Math.PI * 2); c.stroke();
+    c.restore();
+    const el = $('ic' + i); el.classList.add('found');
+    $('found').textContent = foundN;
+    $('msg').textContent = `✨ ${ICONS[h.k][0]} 찾았다! (${foundN}/15)`;
+    [660, 990].forEach((f, k) => setTimeout(() => beep(f, .08), k * 70));
+    if (foundN >= 15) setTimeout(win, 500);
+  }
+  function ripple(ix, iy, ok) {
+    const c = $('marks').getContext('2d');
+    const r = Math.max(10, IW / 60);
+    c.save(); c.strokeStyle = 'rgba(80,80,80,.8)'; c.lineWidth = Math.max(2, IW / 300);
+    c.beginPath(); c.moveTo(ix - r / 2, iy - r / 2); c.lineTo(ix + r / 2, iy + r / 2); c.moveTo(ix + r / 2, iy - r / 2); c.lineTo(ix - r / 2, iy + r / 2); c.stroke();
+    c.restore();
+    setTimeout(() => {
+      c.clearRect(ix - r, iy - r, r * 2, r * 2);
+      // 지운 자리 근처의 찾은 동그라미 다시 그리기
+      hidden.forEach(h => { if (h.found && Math.hypot(h.x - ix, h.y - iy) < h.r * 1.35 + r + 6) {
+        c.save(); c.strokeStyle = '#ff3d71'; c.lineWidth = Math.max(3, IW / 220); c.beginPath(); c.arc(h.x, h.y, h.r * 1.35, 0, Math.PI * 2); c.stroke(); c.restore(); } });
+    }, 650);
+  }
+
+  // 힌트: 못 찾은 아이콘 하나 근처를 반짝 (정확한 자리는 안 알려줌)
+  $('hintBtn').onclick = () => {
+    if (hints <= 0) return;
+    const left = hidden.map((h, i) => [h, i]).filter(([h]) => !h.found);
+    if (!left.length) return;
+    const [h, i] = left[Math.floor(Math.random() * left.length)];
+    hints--;
+    $('hintBtn').textContent = `💡 힌트 ${hints}`; $('hintBtn').disabled = hints <= 0;
+    $('ic' + i).classList.remove('flash'); void $('ic' + i).offsetWidth; $('ic' + i).classList.add('flash');
+    const c = $('marks').getContext('2d');
+    const R = h.r * 4, ox = h.x + (Math.random() - .5) * h.r * 2.4, oy = h.y + (Math.random() - .5) * h.r * 2.4;
+    let n = 0;
+    const blink = setInterval(() => {
+      c.save(); c.globalCompositeOperation = 'source-over';
+      if (n % 2 === 0) { c.strokeStyle = 'rgba(255, 195, 77, .95)'; c.lineWidth = Math.max(3, IW / 200); c.setLineDash([10, 8]); c.beginPath(); c.arc(ox, oy, R, 0, Math.PI * 2); c.stroke(); }
+      else { c.clearRect(ox - R - 10, oy - R - 10, R * 2 + 20, R * 2 + 20); redrawFound(); }
+      c.restore();
+      if (++n >= 6) { clearInterval(blink); c.clearRect(ox - R - 10, oy - R - 10, R * 2 + 20, R * 2 + 20); redrawFound(); }
+    }, 300);
+    $('msg').textContent = `💡 ${ICONS[h.k][0]}은(는) 노란 동그라미 근처에 있어요!`;
+  };
+  function redrawFound() {
+    const c = $('marks').getContext('2d');
+    hidden.forEach(h => { if (h.found) { c.save(); c.strokeStyle = '#ff3d71'; c.lineWidth = Math.max(3, IW / 220); c.beginPath(); c.arc(h.x, h.y, h.r * 1.35, 0, Math.PI * 2); c.stroke(); c.restore(); } });
+  }
+
+  function win() {
+    clearInterval(timer);
+    const secs = Math.floor((Date.now() - t0) / 1000);
+    const st = load();
+    const first = !st.done[cur.id];
+    if (!st.done[cur.id] || secs < st.done[cur.id]) st.done[cur.id] = secs;
+    save(st);
+    if (first) { try { localStorage.setItem('agjj_pending_paint', String((parseInt(localStorage.getItem('agjj_pending_paint') || '0', 10) || 0) + 1)); } catch (e) {} }
+    const used = 3 - hints;
+    const s = used === 0 && secs < 240 ? 3 : used <= 1 ? 2 : 1;
+    $('stars').textContent = '★'.repeat(s) + '☆'.repeat(3 - s);
+    $('winMsg').innerHTML = `「${cur.title || 'JJ의 그림'}」에서<br>${fmt(secs)} 만에 15개를 다 찾았어요! (힌트 ${used}번)` + (first ? '<br>🎁 처음 완성 보상 💧+1' : '');
+    $('win').classList.add('on');
+    [660, 880, 1100, 1320].forEach((f, i) => setTimeout(() => beep(f, .12), i * 120));
+  }
+
+  let ac = null;
+  function beep(f, d) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(.1, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + d + .06);
+      o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d + .08);
+    } catch (e) {}
+  }
+
+  function goHome() {
+    clearInterval(timer);
+    $('game').classList.remove('on'); $('home').classList.remove('off'); $('win').classList.remove('on');
+    $('foundChip').style.display = 'none'; $('timeChip').style.display = 'none';
+    renderGrid();
+  }
+  $('lvSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+    level = +b.dataset.lv;
+    $('lvSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  $('randBtn').onclick = () => works.length && start(works[Math.floor(Math.random() * works.length)]);
+  $('homeBtn').onclick = goHome;
+  $('viewBtn').onclick = () => $('win').classList.remove('on');
+  $('nextBtn').onclick = () => {
+    const st = load(); const left = works.filter(w => !st.done[w.id]);
+    const pool = left.length ? left : works;
+    start(pool[Math.floor(Math.random() * pool.length)]);
+  };
+  boot();
+</script>
+</body>
+</html>
