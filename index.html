@@ -86,6 +86,7 @@
     .msg { grid-column: 2; grid-row: 3; }
   }
 </style>
+<script src="luckyball.js"></script>
 </head>
 <body>
   <div class="top">
@@ -104,7 +105,7 @@
         <button data-lv="1" class="on">🔍 보통</button>
         <button data-lv="2">🦉 어려움</button>
       </div>
-      <button class="btn" id="randBtn">🎲 아무 그림으로 시작</button>
+      <button class="btn" id="randBtn">🔮 럭키볼로 그림 뽑기</button>
     </div>
     <div class="grid" id="grid"></div>
   </section>
@@ -168,9 +169,10 @@
   ];
   const PATHS = ICONS.map(i => new Path2D(i[1]));
   const LEVELS = [
-    { size: 0.085, alpha: 0.95, width: 2.2, name: '쉬움' },
-    { size: 0.062, alpha: 0.78, width: 2.0, name: '보통' },
-    { size: 0.05, alpha: 0.6, width: 1.8, name: '어려움' }
+    // 크기(그림 짧은 변 대비) · 진하기 · 선 굵기 · 밑그림과 색 차이
+    { size: 0.062, alpha: 0.72, width: 1.7, contrast: 0.55, name: '쉬움' },
+    { size: 0.047, alpha: 0.52, width: 1.45, contrast: 0.38, name: '보통' },
+    { size: 0.037, alpha: 0.4, width: 1.25, contrast: 0.28, name: '어려움' }
   ];
 
   let works = [], level = 1, cur = null, hidden = [], foundN = 0, hints = 3, t0 = 0, timer = null, img = null, IW = 0, IH = 0;
@@ -211,14 +213,28 @@
     const pick = ICONS.map((_, i) => i).sort(() => Math.random() - .5).slice(0, 15);
     hidden = [];
     const minD = sz * 1.5;
+    // 무늬가 많은(복잡한) 곳에 숨겨야 찾기 어려워요: 후보 여러 곳 중 무늬가 많은 곳을 골라요
+    const full = c.getImageData(0, 0, IW, IH).data;
+    const busy = (cx, cy) => {
+      let n = 0, sum = 0, sum2 = 0;
+      const r = sz / 2, st = Math.max(2, Math.floor(sz / 8));
+      for (let yy = Math.max(0, cy - r) | 0; yy < Math.min(IH, cy + r); yy += st)
+        for (let xx = Math.max(0, cx - r) | 0; xx < Math.min(IW, cx + r); xx += st) {
+          const i = (yy * IW + xx) * 4, L = full[i] * .299 + full[i + 1] * .587 + full[i + 2] * .114;
+          sum += L; sum2 += L * L; n++;
+        }
+      const m = sum / n; return Math.sqrt(Math.max(0, sum2 / n - m * m));
+    };
     pick.forEach(k => {
-      let x, y, tries = 0;
-      do {
-        x = sz + Math.random() * (IW - sz * 2);
-        y = sz + Math.random() * (IH - sz * 2);
-        tries++;
-      } while (tries < 200 && hidden.some(h => Math.hypot(h.x - x, h.y - y) < minD));
-      hidden.push({ k, x, y, r: sz / 2, rot: (Math.random() - .5) * 1.2, found: false });
+      let best = null;
+      for (let t = 0; t < 40; t++) {
+        const x = sz + Math.random() * (IW - sz * 2), y = sz + Math.random() * (IH - sz * 2);
+        if (hidden.some(h => Math.hypot(h.x - x, h.y - y) < minD)) continue;
+        const v = busy(x, y) + Math.random() * 6;
+        if (!best || v > best.v) best = { x, y, v };
+      }
+      if (!best) { let x, y, tries = 0; do { x = sz + Math.random() * (IW - sz * 2); y = sz + Math.random() * (IH - sz * 2); tries++; } while (tries < 200 && hidden.some(h => Math.hypot(h.x - x, h.y - y) < minD)); best = { x, y }; }
+      hidden.push({ k, x: best.x, y: best.y, r: sz / 2, rot: (Math.random() - .5) * 2.2, found: false });
     });
     hidden.forEach(h => {
       // 아이콘 밑 색을 살짝 진하게/밝게 해서 그림 속에 섞이게
@@ -227,14 +243,12 @@
       for (let i = 0; i < d.length; i += 16) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
       r /= n; g /= n; b /= n;
       const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-      const f = L > 0.55 ? 0.42 : 1.9;
-      const cl = v => Math.max(0, Math.min(255, Math.round(L > 0.55 ? v * f : v + (255 - v) * 0.55)));
+      const k2 = lv.contrast;
+      const cl = v => Math.max(0, Math.min(255, Math.round(L > 0.5 ? v * (1 - k2) : v + (255 - v) * k2)));
       c.save();
       c.globalAlpha = lv.alpha;
       c.translate(h.x, h.y); c.rotate(h.rot); c.scale(sz / 24, sz / 24); c.translate(-12, -12);
       c.lineWidth = lv.width; c.lineJoin = 'round'; c.lineCap = 'round';
-      c.fillStyle = `rgba(${cl(r)},${cl(g)},${cl(b)},0.12)`;
-      c.fill(PATHS[h.k]);
       c.strokeStyle = `rgb(${cl(r)},${cl(g)},${cl(b)})`;
       c.stroke(PATHS[h.k]);
       c.restore();
@@ -447,7 +461,18 @@
     level = +b.dataset.lv;
     $('lvSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
   });
-  $('randBtn').onclick = () => works.length && start(works[Math.floor(Math.random() * works.length)]);
+  // 🔮 JJ 럭키볼: 캡슐 속 그림이 그대로 이번 판 그림이 돼요 (아직 안 한 그림이 더 잘 나와요)
+  function luckyWork() {
+    const st = load(), left = works.filter(w => !st.done[w.id]), from = left.length && Math.random() < .75 ? left : works;
+    return from[Math.floor(Math.random() * from.length)];
+  }
+  $('randBtn').onclick = () => {
+    if (!works.length) return;
+    if (!window.JJLucky) return start(luckyWork());
+    JJLucky.open({ title: '숨은그림찾기 그림 뽑기', sub: '캡슐 속 그림으로 바로 시작해요', balls: 3, goText: '🔮 그림 뽑기!', okText: '이 그림으로 시작!',
+      prizes: () => { const w = luckyWork(); return { icon: '🖼', title: w.title || 'JJ의 그림', desc: '이 그림 속에서 작은 그림 15개를 찾아요!', art: w.id, label: '럭키볼에서 나온 그림은', say: (w.title || 'JJ의 그림') + '!', data: w }; },
+      onPick: p => start(p.data) });
+  };
   $('homeBtn').onclick = goHome;
   $('viewBtn').onclick = () => $('win').classList.remove('on');
   $('nextBtn').onclick = () => {
